@@ -88,6 +88,7 @@ elif [[ ${TRAIN_JOB} == "train" ]]; then
     --job-dir ${BUCKET}/jobs/${JOB_NAME} \
     --region $REGION \
     --scale-tier=CUSTOM \
+    --master-machine-type n1-highcpu-16 \
     --module-name trainer.task \
     --package-path clv_mle/trainer \
     --config clv_mle/config.yaml \

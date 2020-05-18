@@ -17,16 +17,12 @@ from airflow import models
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.hooks.base_hook import BaseHook
 from airflow.contrib.operators import mlengine_operator
-from airflow.contrib.operators import mlengine_operator_utils
 from airflow.contrib.operators import dataflow_operator
 from airflow.contrib.operators import gcs_to_bq
 # TODO Add when Composer on v2.0 and more Hook
 # from airflow.contrib.operators import gcs_list_operator
 from airflow.contrib.hooks.gcs_hook import GoogleCloudStorageHook
 from airflow.utils import trigger_rule
-
-from google.cloud.automl_v1beta1 import AutoMlClient, PredictionServiceClient
-from clv_automl import clv_automl
 
 
 def _get_project_id():
@@ -110,23 +106,8 @@ def do_predict_mle(**kwargs):
 
 def do_predict_automl(**kwargs):
   # get automl clients
-  automl_client = AutoMlClient()
-  automl_predict_client = PredictionServiceClient()
+  automl_client = None
 
-  # get model resource name
-  automl_model = models.Variable.get('automl_model')
-  location_path = automl_client.location_path(PROJECT, REGION)
-  model_list_response = automl_client.list_models(location_path)
-  model_list = [m for m in model_list_response]
-  model = [m for m in model_list if m.display_name == automl_model][0]
-
-  # run batch prediction
-  gcs_prediction_input = 'gs://{}/predictions/to_predict.csv'.format(COMPOSER_BUCKET_NAME)
-  gcs_prediction_output = 'gs://{}/predictions/output'.format(COMPOSER_BUCKET_NAME)
-  clv_automl.do_batch_prediction(automl_predict_client,
-                                 model.name,
-                                 gcs_prediction_input,
-                                 gcs_prediction_output)
 
 t1a = PythonOperator(
           task_id='predict_ml_engine', dag=dag, python_callable=do_predict_mle)

@@ -21,15 +21,12 @@ from airflow.contrib.operators import bigquery_get_data
 from airflow.contrib.operators import gcs_to_bq
 from airflow.contrib.operators import bigquery_to_gcs
 from airflow.contrib.operators import mlengine_operator
-from airflow.contrib.operators import mlengine_operator_utils
 from airflow.contrib.hooks.gcp_mlengine_hook import MLEngineHook
 from airflow.contrib.hooks.gcs_hook import GoogleCloudStorageHook
 from airflow.operators import bash_operator
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.utils import trigger_rule
 
-from google.cloud.automl_v1beta1 import AutoMlClient
-from clv_automl import clv_automl
 
 def _get_project_id():
   """Get project ID from default GCP connection."""
@@ -56,10 +53,6 @@ PREFIX_JOBS_EXPORT = 'jobs/clv-composer'
 PREFIX_FINAL_MODEL = '{}/final'.format(PREFIX_JOBS_EXPORT)
 
 MODEL_PACKAGE_NAME = 'clv_ml_engine-0.1.tar.gz' # Matches name in setup.py
-
-AUTOML_DATASET = models.Variable.get('automl_dataset')
-AUTOML_MODEL = models.Variable.get('automl_model')
-AUTOML_TRAINING_BUDGET = int(models.Variable.get('automl_training_budget'))
 
 
 #[START dag_build_train_deploy]
@@ -129,36 +122,10 @@ t3 = bigquery_operator.BigQueryOperator(
 
 def get_model_type(**kwargs):
   model_type = kwargs['dag_run'].conf.get('model_type')
-  if model_type == 'automl':
-    model_train_task = 'train_automl'
-  else:
-    model_train_task = 'train_ml_engine'
+  model_train_task = 'train_ml_engine'
   return model_train_task
 
 t4_train_cond = BranchPythonOperator(task_id='train_branch', dag=dag, python_callable=get_model_type)
-
-#
-# Train the model using AutoML
-#
-def do_train_automl(**kwargs):
-    """
-    Create, train and deploy automl model.
-    """
-    # instantiate automl client
-    automl_client = AutoMlClient()
-
-    model_name = clv_automl.create_automl_model(automl_client,
-                                                PROJECT,
-                                                REGION,
-                                                DATASET,
-                                                'features_n_target',
-                                                AUTOML_DATASET,
-                                                AUTOML_MODEL,
-                                                AUTOML_TRAINING_BUDGET)
-    clv_automl.deploy_model(automl_client, model_name)
-
-t4_automl = PythonOperator(
-    task_id='train_automl', dag=dag, python_callable=do_train_automl)
 
 
 t4_ml_engine = DummyOperator(task_id='train_ml_engine', dag=dag)
@@ -408,7 +375,7 @@ t11 = PythonOperator(
 t1.set_downstream(t2)
 t2.set_downstream(t3)
 t3.set_downstream(t4_train_cond)
-t4_train_cond.set_downstream([t4_ml_engine, t4_automl])
+t4_train_cond.set_downstream(t4_ml_engine)
 t4_ml_engine.set_downstream([t4a, t4b, t4c])
 t4_ml_engine.set_downstream(t5d)
 t4a.set_downstream(t5a)
